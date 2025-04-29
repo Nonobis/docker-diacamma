@@ -38,15 +38,19 @@ jobs:
       - name: Get latest commit and date from syndic repo
         run: |
           git clone --depth=1 https://github.com/Diacamma2/syndic.git syndic-temp
+
           cd syndic-temp
-          git log -1 --pretty=format:'%H' > ../latest_commit.txt
-          git log -1 --date=format:'%Y%m%d-%H%M' --pretty=format:'%cd' > ../latest_commit_date.txt
+          COMMIT_HASH=$(git log -1 --pretty=format:'%H')
+          COMMIT_DATE=$(git log -1 --date=format:'%Y%m%d-%H%M' --pretty=format:'%cd')
           cd ..
           rm -rf syndic-temp
 
+          echo "$COMMIT_HASH" > latest_commit.txt
+          echo "$COMMIT_DATE" > latest_commit_date.txt
+
           # Vérification
-          if [ ! -s latest_commit.txt ] || [ ! -s latest_commit_date.txt ]; then
-            echo "ERREUR : Impossible de récupérer le dernier commit ou sa date."
+          if [ -z "$COMMIT_HASH" ] || [ -z "$COMMIT_DATE" ]; then
+            echo "ERREUR : Impossible de récupérer le commit ou la date."
             exit 1
           fi
 
@@ -73,14 +77,17 @@ jobs:
         run: |
           COMMIT_DATE=$(cat latest_commit_date.txt | tr -d '\n')
           if [ -z "$COMMIT_DATE" ]; then
-            echo "Commit date vide, arrêt."
+            echo "Commit date vide, tag invalide"
             exit 1
           fi
 
-          IMAGE_OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
-          echo "date_tag=$COMMIT_DATE" >> $GITHUB_OUTPUT
-          echo "image_name=ghcr.io/$IMAGE_OWNER/syndic" >> $GITHUB_OUTPUT
+          IMAGE_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE_NAME="ghcr.io/$IMAGE_OWNER/syndic"
 
+          echo "date_tag=$COMMIT_DATE" >> $GITHUB_OUTPUT
+          echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
+
+          echo "Tag Docker = $IMAGE_NAME:$COMMIT_DATE"
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
