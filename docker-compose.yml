@@ -60,7 +60,7 @@ services:
     volumes:
       - ./data/diacamma/backups/:/backups
       - ./data/diacamma/data:/var/lucterios2/mon-syndic
-      - ./data/diacamma/var/:/var/lucterios2/
+      # - ./data/diacamma/var/error.log:/var/lucterios2/error.log
     environment:
       - DIACAMMA_TYPE=syndic
       - DIACAMMA_ORGANISATION=mon-syndic
