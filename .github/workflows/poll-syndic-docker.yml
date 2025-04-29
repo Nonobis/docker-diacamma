@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '50 23 * * *'  # Runs every day at 23:50
   workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: "Force rebuild even if no changes"
+        required: false
+        default: "false"
 
 jobs:
   prepare:
@@ -60,9 +65,16 @@ jobs:
           latest_commit=$(cat latest_commit.txt)
           echo "Latest commit: $latest_commit"
           echo "Previous commit: ${{ needs.prepare.outputs.previous_commit }}"
-          if [ "${{ needs.prepare.outputs.previous_commit }}" = "$latest_commit" ]; then
+          echo "Force rebuild: ${{ github.event.inputs.force_rebuild }}"
+
+          if [ "${{ github.event.inputs.force_rebuild }}" = "true" ]; then
+            echo "run_build=true" >> $GITHUB_OUTPUT
+            echo "Force rebuild triggered."
+          elif [ "${{ needs.prepare.outputs.previous_commit }}" = "$latest_commit" ]; then
+            echo "No update detected. Skipping build."
             echo "run_build=false" >> $GITHUB_OUTPUT
           else
+            echo "New commit detected."
             echo "run_build=true" >> $GITHUB_OUTPUT
           fi
 
@@ -133,13 +145,21 @@ jobs:
           ref: build-cache
           fetch-depth: 0
 
-      - name: Commit latest commit hash
+      - name: Commit latest commit hash (or reset)
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          echo "${{ needs.detect_changes.outputs.latest_commit }}" > .commit_cache
-          git add .commit_cache
-          git commit -m "Update commit cache: ${{ needs.detect_changes.outputs.latest_commit }}" || echo "No changes to commit"
+
+          if [ "${{ github.event.inputs.force_rebuild }}" = "true" ]; then
+            echo "none" > .commit_cache
+            git add .commit_cache
+            git commit -m "Reset commit cache via force rebuild" || echo "No changes to commit"
+          else
+            echo "${{ needs.detect_changes.outputs.latest_commit }}" > .commit_cache
+            git add .commit_cache
+            git commit -m "Update commit cache: ${{ needs.detect_changes.outputs.latest_commit }}" || echo "No changes to commit"
+          fi
+
           git push origin build-cache
 
   update_version_file:
@@ -198,5 +218,9 @@ jobs:
           tag_name: ${{ needs.build_and_publish.outputs.date_tag }}
           name: "Release - ${{ needs.build_and_publish.outputs.date_tag }}"
           body_path: body.md
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: false
+          allow_updates: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
