@@ -50,8 +50,7 @@ x-defaults-ress:
 services:
 
   app:
-    <<: *default-settings-std
-    <<: *default-settings-ressources
+    <<: [*default-settings-std, *default-settings-ressources]
     image: local-build/diacamma/v01
     # read_only: true
     build:
@@ -63,7 +62,7 @@ services:
     volumes:
       - ./data/diacamma/backups/:/backups
       - ./data/diacamma/data:/var/lucterios2/mon-syndic
-      # - ./data/diacamma/var/error.log:/var/lucterios2/error.log
+      - ./data/diacamma/var/:/var/lucterios2/
     environment:
       - DIACAMMA_TYPE=syndic
       - DIACAMMA_ORGANISATION=mon-syndic
