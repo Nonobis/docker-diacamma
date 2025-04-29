@@ -204,10 +204,16 @@ jobs:
           LATEST_COMMIT="${{ needs.detect_changes.outputs.latest_commit }}"
 
           echo "## Commits since last build:" > body.md
-          if [ "$PREVIOUS_COMMIT" != "none" ]; then
-            git log --pretty=format:'- %h %s' $PREVIOUS_COMMIT..$LATEST_COMMIT >> body.md
-          else
+
+          if [ "$PREVIOUS_COMMIT" = "none" ]; then
+            # No previous commit: list last 10 commits
             git log --pretty=format:'- %h %s' -n 10 >> body.md
+          elif [ "$PREVIOUS_COMMIT" = "$LATEST_COMMIT" ]; then
+            # Same commit: only show the latest commit
+            git log --pretty=format:'- %h %s' -n 1 $LATEST_COMMIT >> body.md
+          else
+            # Normal case: list commits between previous and latest
+            git log --pretty=format:'- %h %s' $PREVIOUS_COMMIT..$LATEST_COMMIT >> body.md
           fi
 
           echo -e "\n### Docker image\n\`ghcr.io/nonobis/diacama:$TAG\`" >> body.md
