@@ -77,10 +77,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Checkout main branch to access Dockerfile
+      - name: Checkout master branch to access Dockerfile
         run: |
-          git checkout main
-          git pull origin main
+          git checkout master
+          git pull origin master
 
       - name: Build Docker image
         run: |
