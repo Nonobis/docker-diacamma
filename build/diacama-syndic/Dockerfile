@@ -7,7 +7,7 @@ ENV LUCTERIOS_PATH /var/lucterios2
 RUN set -x ; \
   apt update ; \
   apt-get install -y libxml2-dev libxslt-dev libjpeg-dev libfreetype6 libfreetype6-dev zlib1g-dev \
-	 python3-pip python3-dev 
+  python3-pip python3-dev locales locales-all libcairo2
 
 # ENV PIP_OPTION ''
 # ENV PIP_OPTION --proxy=$http_proxy
