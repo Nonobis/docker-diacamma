@@ -67,7 +67,7 @@ jobs:
         run: |
           COMMIT_DATE=$(cat latest_commit_date.txt)
           echo "date_tag=$COMMIT_DATE" >> $GITHUB_OUTPUT
-          echo "image_name=ghcr.io/${{ github.repository_owner }}/syndic" >> $GITHUB_OUTPUT
+          echo "image_name=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/syndic" >> $GITHUB_OUTPUT
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
