@@ -35,15 +35,21 @@ jobs:
             echo "previous_commit=none" >> $GITHUB_OUTPUT
           fi
 
-      - name: Get latest commit from syndic repo
+      - name: Get latest commit and date from syndic repo
         run: |
           git clone --depth=1 https://github.com/Diacamma2/syndic.git syndic-temp
           cd syndic-temp
           git log -1 --pretty=format:'%H' > ../latest_commit.txt
-          # Maintenant récupère la date du commit
           git log -1 --date=format:'%Y%m%d-%H%M' --pretty=format:'%cd' > ../latest_commit_date.txt
           cd ..
           rm -rf syndic-temp
+
+          # Vérification
+          if [ ! -s latest_commit.txt ] || [ ! -s latest_commit_date.txt ]; then
+            echo "ERREUR : Impossible de récupérer le dernier commit ou sa date."
+            exit 1
+          fi
+
 
       - name: Check for changes
         id: check
