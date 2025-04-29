@@ -79,7 +79,7 @@ jobs:
       - name: Build Docker image
         run: |
           IMAGE_NAME=${{ steps.set-tags.outputs.image_name }}
-          docker build -t $IMAGE_NAME:latest -t $IMAGE_NAME:${{ steps.set-tags.outputs.date_tag }} .
+          docker build -f build/diacamma-syndic/Dockerfile -t $IMAGE_NAME:latest -t $IMAGE_NAME:${{ steps.set-tags.outputs.date_tag }} .
 
       - name: Push Docker image to GHCR
         run: |
