@@ -96,11 +96,6 @@ jobs:
         id: tags
         run: |
           COMMIT_DATE="${{ needs.detect_changes.outputs.latest_commit_date }}"
-          if [ -z "$COMMIT_DATE" ]; then
-            echo "Empty commit date, invalid tag"
-            exit 1
-          fi
-
           IMAGE_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           IMAGE_NAME="ghcr.io/$IMAGE_OWNER/diacama"
 
@@ -191,34 +186,31 @@ jobs:
     needs: [build_and_publish, detect_changes]
     if: needs.detect_changes.outputs.run_build == 'true'
     steps:
-      - name: Checkout master
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Generate release notes
-        id: changelog
+      - name: Generate release notes from syndic repo
         run: |
           TAG="${{ needs.build_and_publish.outputs.date_tag }}"
           PREVIOUS_COMMIT="${{ needs.detect_changes.outputs.previous_commit }}"
           LATEST_COMMIT="${{ needs.detect_changes.outputs.latest_commit }}"
+          SYNDIC_REPO="https://github.com/Diacamma2/syndic"
 
-          echo "## Commits since last build:" > body.md
+          echo "## Commits from [syndic]($SYNDIC_REPO):" > body.md
+
+          git clone https://github.com/Diacamma2/syndic.git syndic-temp
+          cd syndic-temp
 
           if [ "$PREVIOUS_COMMIT" = "none" ]; then
-            # No previous commit: list last 10 commits
-            git log --pretty=format:'- %h %s' -n 10 >> body.md
+            git log --pretty=format:'- [`%h`]('"$SYNDIC_REPO"'/commit/%H) %s' -n 10 >> ../body.md
           elif [ "$PREVIOUS_COMMIT" = "$LATEST_COMMIT" ]; then
-            # Same commit: only show the latest commit
-            git log --pretty=format:'- %h %s' -n 1 $LATEST_COMMIT >> body.md
+            git log --pretty=format:'- [`%h`]('"$SYNDIC_REPO"'/commit/%H) %s' -n 1 $LATEST_COMMIT >> ../body.md
           else
-            # Normal case: list commits between previous and latest
-            git log --pretty=format:'- %h %s' $PREVIOUS_COMMIT..$LATEST_COMMIT >> body.md
+            git log --pretty=format:'- [`%h`]('"$SYNDIC_REPO"'/commit/%H) %s' $PREVIOUS_COMMIT..$LATEST_COMMIT >> ../body.md
           fi
+
+          cd ..
 
           echo -e "\n### Docker image\n\`ghcr.io/nonobis/diacama:$TAG\`" >> body.md
 
-      - name: Create GitHub release
+      - name: Create or update GitHub release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ needs.build_and_publish.outputs.date_tag }}
