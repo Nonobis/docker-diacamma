@@ -1,0 +1,91 @@
+name: Nightly build if syndic repo changed
+
+on:
+  schedule:
+    - cron: '50 23 * * *'  # Tous les jours à 23h50
+  workflow_dispatch:        # Permet déclenchement manuel
+
+jobs:
+  poll-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout this repository
+        uses: actions/checkout@v4
+
+      - name: Download commit cache
+        uses: actions/download-artifact@v4
+        with:
+          name: commit-cache
+          path: .
+        continue-on-error: true
+
+      - name: Get latest commit from syndic repo
+        run: |
+          git clone --depth=1 https://github.com/Diacamma2/syndic.git syndic-temp
+          cd syndic-temp
+          git log -1 --pretty=format:'%H' > ../latest_commit.txt
+          cd ..
+          rm -rf syndic-temp
+
+      - name: Load previous commit
+        id: previous
+        run: |
+          if [ -f .commit_cache ]; then
+            echo "previous_commit=$(cat .commit_cache)" >> $GITHUB_OUTPUT
+          else
+            echo "previous_commit=none" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check for changes
+        id: check
+        run: |
+          latest_commit=$(cat latest_commit.txt)
+          echo "Latest commit: $latest_commit"
+          echo "Previous commit: ${{ steps.previous.outputs.previous_commit }}"
+          if [ "${{ steps.previous.outputs.previous_commit }}" = "$latest_commit" ]; then
+            echo "No update detected. Exiting."
+            echo "run_build=false" >> $GITHUB_OUTPUT
+          else
+            echo "New commit detected."
+            echo "run_build=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Stop if no changes
+        if: steps.check.outputs.run_build == 'false'
+        run: exit 0
+
+      - name: Set image tags
+        id: set-tags
+        run: |
+          DATE_TAG=$(date +'%Y%m%d-%H%M')
+          echo "date_tag=$DATE_TAG" >> $GITHUB_OUTPUT
+          echo "image_name=ghcr.io/${{ github.repository_owner }}/syndic" >> $GITHUB_OUTPUT
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Docker image
+        run: |
+          IMAGE_NAME=${{ steps.set-tags.outputs.image_name }}
+          docker build -t $IMAGE_NAME:latest -t $IMAGE_NAME:${{ steps.set-tags.outputs.date_tag }} .
+
+      - name: Push Docker image to GHCR
+        run: |
+          IMAGE_NAME=${{ steps.set-tags.outputs.image_name }}
+          docker push $IMAGE_NAME:latest
+          docker push $IMAGE_NAME:${{ steps.set-tags.outputs.date_tag }}
+
+      - name: Save latest commit hash
+        run: |
+          cat latest_commit.txt > .commit_cache
+
+      - name: Upload commit cache
+        uses: actions/upload-artifact@v4
+        with:
+          name: commit-cache
+          path: .commit_cache
