@@ -3,39 +3,46 @@ name: Nightly build if syndic repo changed
 on:
   schedule:
     - cron: '50 23 * * *'  # Tous les jours à 23h50
-  workflow_dispatch:        # Permet déclenchement manuel
+  workflow_dispatch:
 
 jobs:
   poll-and-build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout this repository
+      - name: Checkout main branch
         uses: actions/checkout@v4
-
-      - name: Download commit cache
-        uses: actions/download-artifact@v4
         with:
-          name: commit-cache
-          path: .
+          ref: main
+          persist-credentials: true
+
+      - name: Checkout build-cache branch
+        uses: actions/checkout@v4
+        with:
+          ref: build-cache
+          path: cache-branch
+          fetch-depth: 1
         continue-on-error: true
+
+      - name: Get previous commit from build-cache branch
+        id: previous
+        run: |
+          if [ -f cache-branch/.commit_cache ]; then
+            cat cache-branch/.commit_cache
+            echo "previous_commit=$(cat cache-branch/.commit_cache)" >> $GITHUB_OUTPUT
+          else
+            echo "previous_commit=none" >> $GITHUB_OUTPUT
+          fi
 
       - name: Get latest commit from syndic repo
         run: |
           git clone --depth=1 https://github.com/Diacamma2/syndic.git syndic-temp
           cd syndic-temp
           git log -1 --pretty=format:'%H' > ../latest_commit.txt
+          # Maintenant récupère la date du commit
+          git log -1 --date=format:'%Y%m%d-%H%M' --pretty=format:'%cd' > ../latest_commit_date.txt
           cd ..
           rm -rf syndic-temp
-
-      - name: Load previous commit
-        id: previous
-        run: |
-          if [ -f .commit_cache ]; then
-            echo "previous_commit=$(cat .commit_cache)" >> $GITHUB_OUTPUT
-          else
-            echo "previous_commit=none" >> $GITHUB_OUTPUT
-          fi
 
       - name: Check for changes
         id: check
@@ -55,11 +62,11 @@ jobs:
         if: steps.check.outputs.run_build == 'false'
         run: exit 0
 
-      - name: Set image tags
+      - name: Set image tags based on commit date
         id: set-tags
         run: |
-          DATE_TAG=$(date +'%Y%m%d-%H%M')
-          echo "date_tag=$DATE_TAG" >> $GITHUB_OUTPUT
+          COMMIT_DATE=$(cat latest_commit_date.txt)
+          echo "date_tag=$COMMIT_DATE" >> $GITHUB_OUTPUT
           echo "image_name=ghcr.io/${{ github.repository_owner }}/syndic" >> $GITHUB_OUTPUT
 
       - name: Log in to GitHub Container Registry
@@ -80,12 +87,32 @@ jobs:
           docker push $IMAGE_NAME:latest
           docker push $IMAGE_NAME:${{ steps.set-tags.outputs.date_tag }}
 
-      - name: Save latest commit hash
+      - name: Commit new hash to build-cache branch
         run: |
-          cat latest_commit.txt > .commit_cache
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
 
-      - name: Upload commit cache
-        uses: actions/upload-artifact@v4
-        with:
-          name: commit-cache
-          path: .commit_cache
+          # Prépare la branche build-cache
+          git fetch origin build-cache || true
+          git checkout build-cache || git checkout --orphan build-cache
+
+          echo "$(cat latest_commit.txt)" > .commit_cache
+          git add .commit_cache
+          git commit -m "Update commit cache: $(cat latest_commit.txt)" || echo "No changes to commit"
+          git push origin build-cache
+
+      - name: Update version.txt in main branch
+        run: |
+          git checkout main
+          git pull origin main
+
+          VERSION_FILE="version.txt"
+          echo "# Version File" > $VERSION_FILE
+          echo "Commit: $(cat latest_commit.txt)" >> $VERSION_FILE
+          echo "Commit Date: $(cat latest_commit_date.txt)" >> $VERSION_FILE
+          echo "Build Date (UTC): $(date -u '+%Y-%m-%d %H:%M UTC')" >> $VERSION_FILE
+          echo "Docker Tags: ${{ steps.set-tags.outputs.date_tag }}, latest" >> $VERSION_FILE
+
+          git add version.txt
+          git commit -m "Update version.txt after build (${{ steps.set-tags.outputs.date_tag }})" || echo "No changes to commit"
+          git push origin main
