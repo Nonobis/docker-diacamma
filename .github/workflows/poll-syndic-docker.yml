@@ -35,6 +35,7 @@ jobs:
       run_build: ${{ steps.check.outputs.run_build }}
       latest_commit: ${{ steps.meta.outputs.latest_commit }}
       latest_commit_date: ${{ steps.meta.outputs.latest_commit_date }}
+      previous_commit: ${{ needs.prepare.outputs.previous_commit }}
     steps:
       - name: Clone syndic repository
         run: |
@@ -164,3 +165,38 @@ jobs:
           git add version.txt
           git commit -m "Update version.txt after build (${{ needs.build_and_publish.outputs.date_tag }})" || echo "No changes to commit"
           git push origin master
+
+  publish_release:
+    runs-on: ubuntu-latest
+    needs: [build_and_publish, detect_changes]
+    if: needs.detect_changes.outputs.run_build == 'true'
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate release notes
+        id: changelog
+        run: |
+          TAG="${{ needs.build_and_publish.outputs.date_tag }}"
+          PREVIOUS_COMMIT="${{ needs.detect_changes.outputs.previous_commit }}"
+          LATEST_COMMIT="${{ needs.detect_changes.outputs.latest_commit }}"
+
+          echo "## Commits since last build:" > body.md
+          if [ "$PREVIOUS_COMMIT" != "none" ]; then
+            git log --pretty=format:'- %h %s' $PREVIOUS_COMMIT..$LATEST_COMMIT >> body.md
+          else
+            git log --pretty=format:'- %h %s' -n 10 >> body.md
+          fi
+
+          echo -e "\n### Docker image\n\`ghcr.io/nonobis/diacama:$TAG\`" >> body.md
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.build_and_publish.outputs.date_tag }}
+          name: "Release - ${{ needs.build_and_publish.outputs.date_tag }}"
+          body_path: body.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
