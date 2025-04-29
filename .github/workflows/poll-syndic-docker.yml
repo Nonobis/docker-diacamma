@@ -76,6 +76,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Checkout main branch to access Dockerfile
+        run: |
+          git checkout main
+          git pull origin main
+
       - name: Build Docker image
         run: |
           IMAGE_NAME=${{ steps.set-tags.outputs.image_name }}
